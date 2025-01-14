@@ -116,6 +116,41 @@ def set_webhook():
 def index():
     return 'Bot is running'
 
+@app.route('/')
+def index():
+    return 'Bot is running'
+
+# Add these new debug routes here
+@app.route('/debug', methods=['GET'])
+def debug():
+    try:
+        # Test bot connection
+        me = bot.get_me()
+        # Test webhook
+        webhook_info = bot.get_webhook_info()
+        # Test PDF file
+        pdf_exists = os.path.exists(PDF_PATH)
+        
+        return {
+            "bot_info": f"@{me.username}",
+            "webhook_url": webhook_info.url,
+            "pdf_exists": pdf_exists,
+            "channel_id": CHANNEL_ID
+        }
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@app.route('/test_pdf', methods=['GET'])
+def test_pdf():
+    try:
+        if os.path.exists(PDF_PATH):
+            size = os.path.getsize(PDF_PATH)
+            return f"PDF exists, size: {size} bytes"
+        return "PDF not found"
+    except Exception as e:
+        return f"Error checking PDF: {str(e)}"
+
+# Keep the main block at the very end
 if __name__ == '__main__':
     # Verify PDF exists and is valid
     if not verify_pdf(PDF_PATH):
