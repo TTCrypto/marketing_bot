@@ -1,7 +1,7 @@
 import logging
 import os
 import PyPDF2
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import telegram
 from config import TOKEN, CHANNEL_ID, CHANNEL_LINK, PDF_PATH, WEBHOOK_URL
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -86,6 +86,15 @@ async def check_subscription(update: Update):
             text="Please subscribe to the channel first!"
         )
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        'status': 'alive',
+        'message': 'Bot is running',
+        'webhookUrl': f"{WEBHOOK_URL}/{TOKEN}",
+        'botUsername': bot.get_me().username
+    })
+
 @app.route('/' + TOKEN, methods=['POST'])
 async def webhook():
     if request.method == "POST":
@@ -104,59 +113,62 @@ async def webhook():
             
     return 'OK'
 
-@app.route('/set_webhook', methods=['GET', 'POST'])
+@app.route('/set_webhook', methods=['GET'])
 def set_webhook():
-    webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
-    s = bot.set_webhook(webhook_url)
-    if s:
-        return "Webhook setup successful"
-    return "Webhook setup failed"
+    try:
+        webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+        webhook_info = bot.get_webhook_info()
+        current_url = webhook_info.url
+        
+        if current_url == webhook_url:
+            return jsonify({
+                'status': 'ok',
+                'message': f"Webhook is already set to {webhook_url}"
+            })
+            
+        s = bot.set_webhook(webhook_url)
+        if s:
+            return jsonify({
+                'status': 'ok',
+                'message': f"Webhook setup successful",
+                'url': webhook_url
+            })
+        return jsonify({
+            'status': 'error',
+            'message': "Webhook setup failed"
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f"Error setting webhook: {str(e)}"
+        })
 
-@app.route('/')
-def index():
-    return 'Bot is running'
-
-@app.route('/')
-def index():
-    return 'Bot is running'
-
-# Add these new debug routes here
 @app.route('/debug', methods=['GET'])
 def debug():
     try:
-        # Test bot connection
         me = bot.get_me()
-        # Test webhook
         webhook_info = bot.get_webhook_info()
-        # Test PDF file
         pdf_exists = os.path.exists(PDF_PATH)
         
-        return {
-            "bot_info": f"@{me.username}",
-            "webhook_url": webhook_info.url,
-            "pdf_exists": pdf_exists,
-            "channel_id": CHANNEL_ID
-        }
+        return jsonify({
+            'status': 'ok',
+            'bot_info': f"@{me.username}",
+            'webhook_url': webhook_info.url,
+            'pdf_exists': pdf_exists,
+            'channel_id': CHANNEL_ID
+        })
     except Exception as e:
-        return f"Error: {str(e)}"
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
 
-@app.route('/test_pdf', methods=['GET'])
-def test_pdf():
-    try:
-        if os.path.exists(PDF_PATH):
-            size = os.path.getsize(PDF_PATH)
-            return f"PDF exists, size: {size} bytes"
-        return "PDF not found"
-    except Exception as e:
-        return f"Error checking PDF: {str(e)}"
-
-# Keep the main block at the very end
 if __name__ == '__main__':
     # Verify PDF exists and is valid
     if not verify_pdf(PDF_PATH):
         logging.error("PDF file is missing or invalid")
         exit(1)
-        
+    
     # Set webhook
     webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
     bot.set_webhook(webhook_url)
